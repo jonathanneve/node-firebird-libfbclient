@@ -349,14 +349,14 @@ short getCharsetSize(XSQLVAR *var){
 }
   
 Local<Value> 
-  FBResult::GetFieldValue(XSQLVAR *var, Connection* conn)
+  FBResult:: GetFieldValue(XSQLVAR *var, Connection* conn, int &sqlType, int &sqlLen, int &sqlScale)
   {
     short       dtype;  
     PARAMVARY   *vary2;
   //  short       len; 
     struct tm   times;
     ISC_QUAD    bid;
-    //time_t      rawtime;
+    //time_t      rawtime; 
   //  double      time_val;
    // int 	    days;
     short		bpc, chars; // bytes per char 
@@ -371,6 +371,9 @@ Local<Value>
     Local<Object> js_obj;
     Local<Value> js_field = Nan::Null();
     dtype = var->sqltype & ~1;
+    sqlType = dtype;
+    sqlLen = var->sqllen;
+    sqlScale = var->sqlscale;
     if ((var->sqltype & 1) && (*var->sqlind < 0))
     {
      // NULL PROCESSING
@@ -382,6 +385,7 @@ Local<Value>
             case SQL_TEXT:
             	bpc = getCharsetSize(var);
             	chars =  var->sqllen/(bpc != 0 ? bpc : 1);
+              sqlLen = chars;
                 js_field = Nan::New<String>(var->sqldata,var->sqllen ).ToLocalChecked();
                 if(Local<String>::Cast(js_field)->Length() > chars )
                 {
@@ -554,9 +558,10 @@ Local<Value>
   }
   
 Local<Object> 
-  FBResult::getCurrentRow(bool asObject)
+  FBResult::getCurrentRow(bool asObject, bool fullFieldInfo)
   {
     short  i, num_cols;
+    int sqlLen, sqlScale, sqlType;
    
     Nan::EscapableHandleScope scope;
     Local<Object> js_result_row;   
@@ -573,14 +578,31 @@ Local<Object>
         
     for (i = 0; i < num_cols; i++)
     {
-            js_field = FBResult::GetFieldValue((XSQLVAR *) &sqldap->sqlvar[i], connection);
-            if(asObject)
-            { 
-            	js_result_row->Set(Nan::New<String>(sqldap->sqlvar[i].aliasname,sqldap->sqlvar[i].aliasname_length).ToLocalChecked(), js_field);
-            	//js_result_row->Set(String::New(sqldap->sqlvar[i].sqlname,sqldap->sqlvar[i]), js_field);
+            js_field = FBResult::GetFieldValue((XSQLVAR *) &sqldap->sqlvar[i], connection, sqlType, sqlLen, sqlScale);
+
+            if(fullFieldInfo) 
+            {
+              Local<Object> js_result_field = Nan::New<Object>();
+              js_result_field->Set(Nan::New<String>("fieldName", 9).ToLocalChecked(), Nan::New<String>(sqldap->sqlvar[i].aliasname,sqldap->sqlvar[i].aliasname_length).ToLocalChecked());
+              js_result_field->Set(Nan::New<String>("sqlType", 7).ToLocalChecked(), Nan::New<Integer>(sqlType));
+              js_result_field->Set(Nan::New<String>("sqlLen", 6).ToLocalChecked(), Nan::New<Integer>(sqlLen));
+              js_result_field->Set(Nan::New<String>("sqlScale", 8).ToLocalChecked(), Nan::New<Integer>(sqlScale));
+              js_result_field->Set(Nan::New<String>("value", 5).ToLocalChecked(), js_field);
+              
+              if (asObject)
+                js_result_row->Set(Nan::New<String>(sqldap->sqlvar[i].aliasname,sqldap->sqlvar[i].aliasname_length).ToLocalChecked(), js_result_field);
+              else
+                js_result_row->Set(Nan::New<Integer>(i), js_result_field);
             }
-            else
-            js_result_row->Set(Nan::New<Integer>(i), js_field);
+            else {
+              if(asObject)
+              { 
+                js_result_row->Set(Nan::New<String>(sqldap->sqlvar[i].aliasname,sqldap->sqlvar[i].aliasname_length).ToLocalChecked(), js_field);
+                //js_result_row->Set(String::New(sqldap->sqlvar[i].sqlname,sqldap->sqlvar[i]), js_field);
+              }
+              else
+              js_result_row->Set(Nan::New<Integer>(i), js_field);
+            }
     }    
     
     return scope.Escape(js_result_row);
@@ -625,14 +647,23 @@ NAN_METHOD(FBResult::FetchSync)
     } else{
      return Nan::ThrowError("Expecting bool or string('array'|'object') as second argument");
     };   
-    
+          
+    bool fullFieldInfo = true;
+    if (info.Length() >= 3){
+      if(info[2]->IsBoolean()){
+          fullFieldInfo = info[2]->BooleanValue();
+      } else{
+      return Nan::ThrowError("Expecting bool as third argument");
+      };   
+    }
+
     Local<Value> js_field;
     Local<Object> js_result_row;   
         
     Local<Array> res = Nan::New<Array>(); 
     while (((fetch_stat = isc_dsql_fetch(fb_res->status, &fb_res->stmt, SQL_DIALECT_V6, sqlda)) == 0)&&((rowCount==-1)||(rowCount>0)))
     {
-        js_result_row = fb_res->getCurrentRow(rowAsObject);
+        js_result_row = fb_res->getCurrentRow(rowAsObject, fullFieldInfo);
     /*     if(rowAsObject)
             js_result_row = Object::New();
          else 
@@ -682,7 +713,7 @@ void FBResult::EIO_After_Fetch(uv_work_t *req)
     if(f_req->result) {
         if(f_req->rowCount>0) f_req->rowCount--;
 
-        js_result_row = f_req->res->getCurrentRow(f_req->rowAsObject);
+        js_result_row = f_req->res->getCurrentRow(f_req->rowAsObject, false);
         /*
 	if(f_req->rowAsObject)
     	    js_result_row = Object::New();

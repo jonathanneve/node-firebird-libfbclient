@@ -100,7 +100,7 @@ void FBStatement::InstExecSync(const Nan::FunctionCallbackInfo<v8::Value>& info,
         
         if(sqldap->sqld){ 
            Local<Object> js_result_row;   
-           js_result_row = getCurrentRow(true);
+           js_result_row = getCurrentRow(true, false);
            info.GetReturnValue().Set(js_result_row);
         }  
     
@@ -171,7 +171,7 @@ void FBStatement::EIO_After_Exec(uv_work_t *req)
 		   fb_stmt->retres = true;
 		   if (fb_stmt->statement_type != isc_info_sql_stmt_select)
 		   {
-			   argv[1] = fb_stmt->getCurrentRow(true);
+			   argv[1] = fb_stmt->getCurrentRow(true, false);
 			   argc = 2;
 		   }
 	   }

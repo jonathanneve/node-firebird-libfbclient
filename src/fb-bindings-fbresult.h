@@ -34,14 +34,14 @@ public:
  static void clean_sqlda(XSQLDA *sqlda);
  static bool clone_sqlda(XSQLDA *src_sqlda,XSQLDA **dest_sqlda);
  static void set_params(XSQLDA *sqlda, Nan::NAN_METHOD_ARGS_TYPE info, int firstArg);
- Local<Object> getCurrentRow(bool asObject);
+ Local<Object> getCurrentRow(bool asObject, bool fullFieldInfo);
    
 protected:  
   static NAN_METHOD(New);
   
     
   static Local<Value> 
-  GetFieldValue(XSQLVAR *var, Connection* conn);
+  GetFieldValue(XSQLVAR *var, Connection* conn, int &sqlType, int &sqlLen, int &sqlScale);
 
   static NAN_METHOD(FetchSync);
 

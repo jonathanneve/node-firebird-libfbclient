@@ -645,7 +645,7 @@ void Connection::InstQuerySync(const Nan::FunctionCallbackInfo<v8::Value>& info,
     	
     if(statement_type==isc_info_sql_stmt_exec_procedure){
     	FBResult *fb_res = Nan::ObjectWrap::Unwrap<FBResult>(js_result);
-    	Local<Value> js_value = fb_res->getCurrentRow(true);
+    	Local<Value> js_value = fb_res->getCurrentRow(true, false);
     	info.GetReturnValue().Set(js_value);
     }
     
@@ -709,7 +709,7 @@ void Connection::EIO_After_Query(uv_work_t *req)
      
      if(q_req->statement_type==isc_info_sql_stmt_exec_procedure ){
     	 FBResult *fb_res = Nan::ObjectWrap::Unwrap<FBResult>(js_result);
-    	 argv[1] = fb_res->getCurrentRow(true);
+    	 argv[1] = fb_res->getCurrentRow(true, false);
      }
      else  argv[1] = js_result;    
      argv[0] = Nan::Null();
